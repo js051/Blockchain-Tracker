@@ -1,0 +1,24 @@
+crypto_flow_tracker0127_0419/
+    .env
+    .gitignore
+    app.py
+    config.py
+    requirements.txt
+models/
+    anomaly_detection.py
+    data_processing.py
+    __init__.py
+services/
+    tx_filter.py
+static/
+    charts.js
+    styles.css
+templates/
+    graph.html
+    index.html
+    result.html
+tests/
+    conftest.py
+    test_anomalies.py
+    test_app.py
+    __init__.py

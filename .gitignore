@@ -13,6 +13,7 @@ instance/
 # 忽略 Flask webassets 快取
 .webassets-cache
 
-# 忽略已經誤提交的檔案
+# 忽略不須提交的檔案
 exported_content.txt
+error_log.txt
 flask_session/

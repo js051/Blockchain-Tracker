@@ -264,26 +264,61 @@ def graph():
 
 @app.route("/graph_data")
 def graph_data():
-    txs = session.get("transactions", [])
-    if not txs:
-        return jsonify({"nodes":[],"links":[]})
+    transactions = session.get("transactions", [])
+    if not transactions:
+        # 若沒有資料，回傳一組假資料方便前端測試
+        dummy_data = {
+            "nodes": [
+                {"id": "0x111", "is_blacklisted": False},
+                {"id": "0x222", "is_blacklisted": True},
+                {"id": "0x333", "is_blacklisted": False}
+            ],
+            "links": [
+                {"source": "0x111", "target": "0x222", "value": 50},
+                {"source": "0x222", "target": "0x333", "value": 120},
+                {"source": "0x333", "target": "0x111", "value": 5}
+            ]
+        }
+        app.logger.debug("回傳假資料: %s", dummy_data)
+        return jsonify(dummy_data)
 
-    black_set = set(addr.lower() for addr in BLACKLISTED_WALLETS)
-    black_set.add("0xblacklisted")
+    # 取得黑名單（全部轉為小寫）
+    blacklisted_set = {addr.lower() for addr in BLACKLISTED_WALLETS}
+    # 強制加入測試用黑名單地址
+    blacklisted_set.add("0xblacklisted")
 
-    node_map = {}
+    nodes_map = {}
     links = []
-    for tx in txs:
-        f = tx.get("from","未知").lower()
-        t = tx.get("to","未知").lower()
-        val = tx.get("usd_value",0.0)
-        if f not in node_map:
-            node_map[f] = {"id":f,"is_blacklisted":(f in black_set)}
-        if t not in node_map:
-            node_map[t] = {"id":t,"is_blacklisted":(t in black_set)}
-        links.append({"source":f, "target":t, "value":val})
-    nodes = list(node_map.values())
-    return jsonify({"nodes":nodes,"links":links})
+
+    for tx in transactions:
+        f = (tx.get("from", "未知") or "未知").lower()
+        t = (tx.get("to", "未知") or "未知").lower()
+        # 如果 usd_value 不是數字，強制轉換為 0.0
+        try:
+            usd_val = float(tx.get("usd_value", 0))
+        except Exception as e:
+            app.logger.error("轉換 usd_value 失敗，tx=%s, error=%s", tx, e)
+            usd_val = 0.0
+
+        # 排除自連（若 from == to 則不加入連線，但仍可建立節點）
+        if f == t:
+            app.logger.debug("發現自連交易，忽略連線: %s -> %s", f, t)
+        else:
+            links.append({
+                "source": f,
+                "target": t,
+                "value": usd_val
+            })
+
+        if f not in nodes_map:
+            nodes_map[f] = {"id": f, "is_blacklisted": (f in blacklisted_set)}
+        if t not in nodes_map:
+            nodes_map[t] = {"id": t, "is_blacklisted": (t in blacklisted_set)}
+
+    nodes = list(nodes_map.values())
+    ret = {"nodes": nodes, "links": links}
+    app.logger.debug("graph_data 回傳資料: %s", ret)
+    return jsonify(ret)
 
 @app.route("/graph_data_nhop")
 def graph_data_nhop():
