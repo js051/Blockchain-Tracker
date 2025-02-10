@@ -1,0 +1,23 @@
+my_project/
+  ├─ app.py                # Flask 主程式，集中路由
+  ├─ config.py             # 讀取 .env / API_KEY / 黑名單
+  ├─ .env                  # 環境變數 (SECRET_KEY, ETHERSCAN_API_KEY 等)
+  ├─ .gitignore            # 忽略 .env、__pycache__ 等
+  ├─ requirements.txt      # Python 相依套件
+  ├─ models/
+  │   ├─ anomaly_detection.py
+  │   └─ data_processing.py
+  ├─ services/             # (可放後端服務邏輯，如 tx_filter.py, blockchain_api.py ...)
+  ├─ templates/
+  │   ├─ index.html        # 首頁: 查詢表單
+  │   ├─ result.html       # 顯示篩選交易，前端分頁搜尋
+  │   └─ graph.html        # D3.js 力導向圖
+  ├─ static/
+  │   ├─ styles.css        # 自訂樣式
+  │   ├─ charts.js         # (若有額外圖表 JS)
+  │   └─ ...               # 其他 JS、圖片等
+  └─ tests/
+      ├─ test_app.py
+      ├─ test_anomalies.py
+      └─ conftest.py
+

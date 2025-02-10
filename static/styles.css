@@ -1,0 +1,156 @@
+/* static/styles.css */
+
+/* 基本樣式 */
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f9f9f9;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 800px;
+    margin: 50px auto;
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+h1, h2 {
+    color: #333;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+}
+
+label {
+    margin-top: 10px;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+input, select, button {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+button {
+    margin-top: 20px;
+    background-color: #007bff;
+    color: #fff;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+.error {
+    color: red;
+    margin-top: 10px;
+}
+
+/* 表格樣式 */
+.table-container {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+}
+
+th, td {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    text-align: left;
+    word-break: break-all;
+}
+
+th {
+    background-color: #f4f4f4;
+    color: #333;
+}
+
+.anomaly {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+/* 分頁按鈕樣式 */
+.pagination .btn {
+    padding: 6px 12px;
+    margin: 0 2px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.pagination .btn:hover {
+    background-color: #0056b3;
+}
+
+/* 下載 CSV 按鈕樣式 */
+form[action="/export"] button {
+    padding: 8px 16px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+form[action="/export"] button:hover {
+    background-color: #218838;
+}
+
+/* 調整摘要和圖表的樣式 */
+.container h2 {
+    margin-top: 20px;
+}
+
+.container p {
+    margin: 5px 0;
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+    .container {
+        margin: 20px;
+        padding: 15px;
+    }
+
+    table {
+        min-width: 100%;
+    }
+}
+
+/* 可訪問性改進 */
+input:focus, select:focus, button:focus {
+    outline: 2px solid #0056b3;
+    outline-offset: 2px;
+}
+
+.error {
+    font-weight: bold;
+}
+
+.anomaly {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+/* 表格行的其他樣式 */
+.table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.table tr:hover {
+    background-color: #f1f1f1;
+}

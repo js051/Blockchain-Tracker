@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>金流網路視覺化 (Force Layout + n-hop + 時間軸)</title>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      margin: 0; padding: 20px; background: #f9f9f9;
+      font-family: "Microsoft JhengHei", sans-serif;
+    }
+    .container {
+      background:#fff; padding:20px; border-radius:8px; 
+      box-shadow:0 0 10px rgba(0,0,0,0.1);
+    }
+    #graph-container {
+      width:100%; height:600px; border:1px solid #ccc; border-radius:4px;
+      position:relative; overflow:hidden;
+    }
+    #chart {
+      width:100%; height:100%;
+      viewBox:0 0 960 600; 
+      preserveAspectRatio:xMidYMid meet;
+    }
+    .node { stroke:#fff; stroke-width:1.5px; cursor:pointer; }
+    .link { stroke:#999; stroke-opacity:0.6; }
+    .tooltip {
+      position:absolute; padding:5px 8px; background:rgba(0,0,0,0.7); color:#fff;
+      border-radius:3px; font-size:12px; pointer-events:none; 
+      opacity:0; transition:opacity 0.2s; z-index:999;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <a href="/" class="btn btn-secondary mb-2">回主頁</a>
+  <h1>金流網路視覺化</h1>
+  <p class="text-muted">
+    - Force Layout: 每次新增節點 / 連線，都重新計算位置，但透過較快速的衰減，避免節點長時間亂飛。<br>
+    - n-hop: 從後端 /graph_data_nhop 取得更多鄰居後合併到現有圖。<br>
+    - 時間軸播放: 依時間逐筆新增連線。<br>
+    - 搜尋地址 / 右鍵移除節點。
+  </p>
+
+  <!-- 操作列: n-hop + 播放速度 + 時間軸 -->
+  <div class="form-inline mb-3">
+    <label class="mr-2">n-hop:</label>
+    <input type="number" id="hopInput" class="form-control mr-2" value="1" style="width:80px;">
+    <button id="hopBtn" class="btn btn-info mr-3">Load n-hop</button>
+
+    <button id="playBtn" class="btn btn-outline-primary mr-2">播放</button>
+    <button id="stopBtn" class="btn btn-outline-danger mr-3">停止</button>
+
+    <label for="speedRange" class="mr-2">速度(ms):</label>
+    <input type="range" id="speedRange" min="100" max="3000" step="100" value="1000" style="width:100px;">
+    <span id="speedLabel" class="ml-1">1000 ms</span>
+  </div>
+
+  <div class="form-inline mb-3">
+    <label class="mr-2">進度:</label>
+    <input type="range" id="timelineRange" min="0" value="0" step="1" style="flex:1;">
+    <span id="timelineInfo" class="ml-2"></span>
+  </div>
+
+  <!-- 搜尋 & 移除 -->
+  <div class="form-inline mb-3">
+    <label class="mr-2">搜尋地址:</label>
+    <input type="text" id="searchInput" class="form-control mr-2" placeholder="0x...">
+    <button id="searchBtn" class="btn btn-secondary">搜尋並高亮</button>
+    <small class="text-muted ml-3">(右鍵節點可移除)</small>
+  </div>
+
+  <div id="graph-container">
+    <svg id="chart"></svg>
+    <div class="tooltip" id="tooltip"></div>
+  </div>
+</div>
+
+<script>
+// ---- D3.js 基本設定 ----
+const svg = d3.select("#chart");
+const tooltip = d3.select("#tooltip");
+const g = svg.append("g").attr("class","all-content");
+
+// zoom & pan
+const zoom = d3.zoom()
+  .scaleExtent([0.1, 10])
+  .on("zoom",(event)=>{
+    g.attr("transform", event.transform);
+  });
+svg.call(zoom);
+
+// Force Simulation
+// 調整 alphaDecay 或 velocityDecay, 使得每次重新啟動後能更快收斂
+let simulation = d3.forceSimulation()
+  .force("link", d3.forceLink().distance(120).id(d=>d.id))
+  .force("charge", d3.forceManyBody().strength(-300))
+  .force("center", d3.forceCenter(480,300))
+  .alphaDecay(0.05)        // 收斂速度
+  .velocityDecay(0.5);     // 速度衰減, 可再自行調大, 例如0.7
+
+let nodes = [];
+let links = [];
+let linkWidthScale;
+
+// BFS n-hop
+document.getElementById("hopBtn").addEventListener("click", async ()=>{
+  let hop = parseInt(document.getElementById("hopInput").value)||1;
+  try {
+    const res = await fetch(`/graph_data_nhop?hop=${hop}`);
+    const data = await res.json();
+    if(!data.nodes || !data.links){
+      alert("n-hop 回傳格式有誤");
+      return;
+    }
+    // 合併
+    mergeData(data.nodes, data.links);
+    // re-run layout
+    simulation.alpha(0.6).restart();
+  } catch(e){
+    console.error("n-hop error", e);
+  }
+});
+
+// 載入基礎圖
+function loadGraphData() {
+  fetch("/graph_data")
+    .then(r=>r.json())
+    .then(data=>{
+      nodes = data.nodes||[];
+      links = data.links||[];
+      updateGraph();
+
+      // 用於時間軸
+      originalLinks = JSON.parse(JSON.stringify(links));
+      originalLinks.forEach(l=>{
+        if(!l.time) l.time = "1970-01-01 00:00:00";
+      });
+      originalLinks.sort((a,b)=> new Date(a.time)- new Date(b.time));
+      timelineRange.max = originalLinks.length.toString();
+      updateTimelineInfo(0, originalLinks.length);
+    })
+    .catch(e=> console.error("loadGraphData error:", e));
+}
+
+// merge n-hop 新回來的 nodes, links
+function mergeData(newNodes, newLinks) {
+  // 先把已存在id收集
+  let existingIds = new Set(nodes.map(n=>n.id));
+  let existingPairs = new Set(links.map(l=> l.source.id+"-"+l.target.id+"-"+l.value));
+  
+  // 合併 nodes
+  for(let nd of newNodes){
+    if(!existingIds.has(nd.id)){
+      nodes.push(nd);
+      existingIds.add(nd.id);
+    }
+  }
+  // 合併 links
+  for(let lk of newLinks){
+    let key = lk.source+"-"+lk.target+"-"+lk.value;
+    if(!existingPairs.has(key)){
+      links.push(lk);
+      existingPairs.add(key);
+    }
+  }
+  updateGraph();
+}
+
+function updateGraph() {
+  // link join
+  let linkSel = g.selectAll("line.link")
+    .data(links, d => d.source+"-"+d.target+"-"+d.value);
+  linkSel.exit().remove();
+
+  let linkEnter = linkSel.enter().append("line")
+    .attr("class","link")
+    .on("mouseover",function(e,d){
+      d3.select(this).attr("stroke","orange").attr("stroke-width",3);
+      tooltip.html(`金額(USD): ${d.value.toFixed(2)}<br>時間: ${d.time}`)
+        .style("left",(e.pageX+12)+"px")
+        .style("top",(e.pageY+12)+"px")
+        .style("opacity",1);
+    })
+    .on("mousemove",(e)=>{
+      tooltip.style("left",(e.pageX+12)+"px")
+             .style("top",(e.pageY+12)+"px");
+    })
+    .on("mouseout",(e,d)=>{
+      d3.select(this).attr("stroke","#999").attr("stroke-width", linkWidthScale(d.value));
+      tooltip.style("opacity",0);
+    });
+  linkSel = linkSel.merge(linkEnter);
+
+  // node join
+  let nodeSel = g.selectAll("circle.node")
+    .data(nodes, d=> d.id);
+  nodeSel.exit().remove();
+
+  let nodeEnter = nodeSel.enter().append("circle")
+    .attr("class","node")
+    .attr("r",10)
+    .attr("fill", d=> d.is_blacklisted? "red":"green")
+    .on("mouseover", function(e,d){
+      tooltip.html(`地址: ${d.id}<br>黑名單: ${d.is_blacklisted?'是':'否'}`)
+        .style("left",(e.pageX+12)+"px")
+        .style("top",(e.pageY+12)+"px")
+        .style("opacity",1);
+    })
+    .on("mousemove",(e)=>{
+      tooltip.style("left",(e.pageX+12)+"px").style("top",(e.pageY+12)+"px");
+    })
+    .on("mouseout",()=>{
+      tooltip.style("opacity",0);
+    })
+    .on("contextmenu",(e,d)=>{
+      e.preventDefault();
+      removeNode(d.id);
+    })
+    .call(d3.drag()
+      .on("start", dragstarted)
+      .on("drag", dragged)
+      .on("end", dragended)
+    );
+  nodeSel = nodeSel.merge(nodeEnter);
+
+  // linkWidthScale
+  let maxVal = d3.max(links, d=> d.value) || 1;
+  linkWidthScale = d3.scaleLinear().domain([0, maxVal]).range([0.5,8]);
+  linkSel.attr("stroke","#999")
+         .attr("stroke-width", d=> linkWidthScale(d.value));
+
+  // Force simulation
+  simulation.nodes(nodes);
+  // 若 link.source, link.target 還是字串 => 需先 transform
+  // 但我們 BFS 回來其實是 string, D3 會自動 map =>  這裡 .id(d=>d.id)
+  simulation.force("link").links(links);
+  // 重新啟動  alpha=0.6 => 以一個中等數值開始
+  simulation.alpha(0.6).restart();
+  
+  simulation.on("tick", ()=>{
+    linkSel
+      .attr("x1", d=> d.source.x)
+      .attr("y1", d=> d.source.y)
+      .attr("x2", d=> d.target.x)
+      .attr("y2", d=> d.target.y);
+    nodeSel
+      .attr("cx", d=> d.x)
+      .attr("cy", d=> d.y);
+  });
+}
+
+// 拖曳
+function dragstarted(event,d) {
+  if(!event.active) simulation.alphaTarget(0.3).restart();
+  d.fx = d.x;
+  d.fy = d.y;
+}
+function dragged(event,d) {
+  d.fx = event.x;
+  d.fy = event.y;
+}
+function dragended(event,d) {
+  if(!event.active) simulation.alphaTarget(0);
+  // 如果想讓節點固定位置 => 保留 d.fx, d.fy
+  // 若想讓它在下次layout時動 => 註解下行
+  // d.fx = null; d.fy = null;
+}
+
+function removeNode(id) {
+  nodes = nodes.filter(n=> n.id!==id);
+  links = links.filter(l=> {
+    let sid = (typeof l.source==="object")?l.source.id:l.source;
+    let tid = (typeof l.target==="object")?l.target.id:l.target;
+    return (sid!==id && tid!==id);
+  });
+  updateGraph();
+}
+
+// 搜尋
+document.getElementById("searchBtn").addEventListener("click", ()=>{
+  let kw = document.getElementById("searchInput").value.trim().toLowerCase();
+  if(!kw) return;
+  g.selectAll("circle.node")
+    .attr("fill", d=> d.is_blacklisted?"red":"green")
+    .filter(d=> d.id.toLowerCase().includes(kw))
+    .attr("fill","yellow");
+});
+
+// ---------- 時間軸播放 ----------
+let originalLinks = [];
+let playing = false;
+let timer = null;
+let currentIndex = 0;
+let speedMs = 1000;
+
+let speedRange = document.getElementById("speedRange");
+let speedLabel = document.getElementById("speedLabel");
+speedMs = parseInt(speedRange.value,10);
+speedLabel.textContent = speedMs+" ms";
+
+speedRange.addEventListener("input",()=>{
+  speedMs = parseInt(speedRange.value,10);
+  speedLabel.textContent = speedMs+" ms";
+  if(playing){
+    stopPlayback();
+    startPlayback();
+  }
+});
+
+// timeline
+let timelineRange = document.getElementById("timelineRange");
+let timelineInfo = document.getElementById("timelineInfo");
+timelineRange.value="0";
+timelineRange.addEventListener("input",()=>{
+  let val = parseInt(timelineRange.value,10);
+  stopPlayback();
+  jumpToIndex(val);
+});
+
+document.getElementById("playBtn").addEventListener("click",()=>{
+  stopPlayback();
+  startPlayback();
+});
+document.getElementById("stopBtn").addEventListener("click",()=>{
+  stopPlayback();
+});
+
+function startPlayback() {
+  if(playing) return;
+  playing = true;
+
+  // 清空圖
+  nodes = [];
+  links = [];
+  updateGraph();
+
+  currentIndex=0;
+  timelineRange.value="0";
+  updateTimelineInfo(currentIndex, originalLinks.length);
+
+  timer = setInterval(()=>{
+    if(currentIndex>=originalLinks.length) {
+      stopPlayback();
+      return;
+    }
+    addLinkUpToIndex(currentIndex);
+    currentIndex++;
+    timelineRange.value=currentIndex.toString();
+    updateTimelineInfo(currentIndex, originalLinks.length);
+  }, speedMs);
+}
+function stopPlayback() {
+  playing=false;
+  if(timer) clearInterval(timer);
+}
+function addLinkUpToIndex(idx){
+  let l = originalLinks[idx];
+  // 確保 source/target
+  let sid = l.source, tid = l.target;
+  if(!nodes.find(n=> n.id===sid)){
+    nodes.push({ id: sid, is_blacklisted:false});
+  }
+  if(!nodes.find(n=> n.id===tid)){
+    nodes.push({ id: tid, is_blacklisted:false});
+  }
+  links.push(l);
+  updateGraph();  // Force layout => 節點可能動, 但會快速收斂
+}
+function jumpToIndex(newIndex){
+  nodes=[];
+  links=[];
+  updateGraph();
+  for(let i=0;i<newIndex;i++){
+    addLinkUpToIndex(i);
+  }
+  currentIndex=newIndex;
+  updateTimelineInfo(currentIndex, originalLinks.length);
+}
+function updateTimelineInfo(idx, total){
+  timelineInfo.textContent=`${idx} / ${total}`;
+}
+
+// 載入基礎資料
+loadGraphData();
+</script>
+</body>
+</html>
