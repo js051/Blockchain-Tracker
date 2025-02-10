@@ -8,6 +8,23 @@ body {
     padding: 0;
 }
 
+/* 動態容器，針對查詢結果頁面 */
+.dynamic-container {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 15px;
+}
+
+/* 在小型裝置上，自動縮小容器寬度 */
+@media (max-width: 768px) {
+    .dynamic-container {
+        max-width: 100%;
+        padding: 10px;
+    }
+}
+
+/* 以下為原有樣式 */
 .container {
     max-width: 800px;
     margin: 50px auto;
@@ -96,7 +113,7 @@ th {
     background-color: #0056b3;
 }
 
-/* 下載 CSV 按鈕樣式 */
+/* CSV 匯出按鈕 */
 form[action="/export"] button {
     padding: 8px 16px;
     background-color: #28a745;
@@ -109,6 +126,9 @@ form[action="/export"] button {
 form[action="/export"] button:hover {
     background-color: #218838;
 }
+
+/* 其他樣式請依需求保留或修改 */
+
 
 /* 調整摘要和圖表的樣式 */
 .container h2 {
