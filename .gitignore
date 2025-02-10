@@ -5,3 +5,4 @@ __pycache__/
 instance/
 .webassets-cache
 "exported_content.txt" 
+"flask_session/" 
