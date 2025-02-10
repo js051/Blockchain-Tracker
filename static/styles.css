@@ -16,6 +16,12 @@ body {
     padding: 15px;
 }
 
+/* 加強異常交易行樣式 */
+tr.anomaly td {
+    background-color: #f8d7da !important;  /* 淡紅背景 */
+    color: #721c24 !important;             /* 深紅文字 */
+}
+
 /* 在小型裝置上，自動縮小容器寬度 */
 @media (max-width: 768px) {
     .dynamic-container {
@@ -126,9 +132,6 @@ form[action="/export"] button {
 form[action="/export"] button:hover {
     background-color: #218838;
 }
-
-/* 其他樣式請依需求保留或修改 */
-
 
 /* 調整摘要和圖表的樣式 */
 .container h2 {
