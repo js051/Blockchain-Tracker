@@ -1,8 +1,18 @@
 # .gitignore
+
+# 忽略環境變數檔案
 .env
+
+# 忽略 Python 產生的快取
 __pycache__/
 *.pyc
+
+# 忽略 Flask 的 instance 目錄
 instance/
+
+# 忽略 Flask webassets 快取
 .webassets-cache
-"exported_content.txt" 
-"flask_session/" 
+
+# 忽略已經誤提交的檔案
+exported_content.txt
+flask_session/
